@@ -11,7 +11,7 @@ public class UserValidator {
         this.userDAO=userDAO;
     }
     public void ValidateUserExists(String name) {
-        if(userDAO.existsByName(name)){
+        if(!userDAO.existsByName(name)){
             throw new UserNotFoundException("User not found");
         }
     }

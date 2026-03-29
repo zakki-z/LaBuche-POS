@@ -22,11 +22,6 @@ public class OrderController {
     public List<OrderDTO> getAllOrders(){
         return orderService.getAllOrders();
     }
-    @GetMapping("/{user}")
-    @ResponseStatus(value = HttpStatus.OK)
-    public List<Order> getAllOrdersPerUser(@PathVariable @RequestBody @Valid User user){
-        return orderService.getAllOrdersPerUser(user);
-    }
     @GetMapping("/{orderId}")
     @ResponseStatus(value = HttpStatus.OK)
     public OrderDTO getOrderById(@PathVariable long orderId){
@@ -45,6 +40,6 @@ public class OrderController {
     @DeleteMapping("/{orderId}")
     @ResponseStatus(value = HttpStatus.NO_CONTENT)
     public void deleteOrder(@PathVariable long orderId){
-        orderService.deleteProduct(orderId);
+        orderService.deleteOrder(orderId);
     }
 }

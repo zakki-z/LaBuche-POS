@@ -19,9 +19,6 @@ public class OrderDAO {
     public boolean existsById(Long id){
         return orderRepository.existsById(id);
     }
-    public boolean existsByName(String name){
-        return orderRepository.existsByName(name);
-    }
     public Order save(Order order){
         return orderRepository.save(order);
     }
