@@ -11,6 +11,13 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.util.Optional;
 
+/**
+ * Non-blocking filter: if X-Username header is present and valid,
+ * attaches the User to the request. Otherwise, the request continues
+ * without a user (anonymous access).
+ *
+ * Individual controllers/services decide whether a user is required.
+ */
 @Component
 @Order(1)
 public class SimpleAuthFilter implements Filter {
@@ -26,34 +33,21 @@ public class SimpleAuthFilter implements Filter {
             throws IOException, ServletException {
 
         HttpServletRequest request = (HttpServletRequest) servletRequest;
-        HttpServletResponse response = (HttpServletResponse) servletResponse;
 
-        String path = request.getRequestURI();
-
-        // Allow auth endpoints and OPTIONS (CORS preflight) without any header
-        if (path.startsWith("/api/auth") || "OPTIONS".equalsIgnoreCase(request.getMethod())) {
-            chain.doFilter(request, response);
+        // Allow CORS preflight
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            chain.doFilter(request, servletResponse);
             return;
         }
 
         String username = request.getHeader("X-Username");
 
-        if (username == null || username.isBlank()) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json");
-            response.getWriter().write("{\"error\": \"Missing X-Username header\"}");
-            return;
+        if (username != null && !username.isBlank()) {
+            Optional<User> userOpt = userRepository.findByUsername(username);
+            userOpt.ifPresent(user -> request.setAttribute("currentUser", user));
         }
 
-        Optional<User> userOpt = userRepository.findByUsername(username);
-        if (userOpt.isEmpty()) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json");
-            response.getWriter().write("{\"error\": \"User not found\"}");
-            return;
-        }
-
-        request.setAttribute("currentUser", userOpt.get());
-        chain.doFilter(request, response);
+        // Always continue — no blocking
+        chain.doFilter(request, servletResponse);
     }
 }

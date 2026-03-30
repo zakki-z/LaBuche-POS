@@ -30,4 +30,15 @@ public class AuthController {
         AuthResponse response = authService.login(loginRequest);
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * Verify credentials without changing session.
+     * Used by the frontend for on-demand auth prompts.
+     * Returns the user info if credentials are valid.
+     */
+    @PostMapping("/verify")
+    public ResponseEntity<?> verify(@Valid @RequestBody LoginRequest loginRequest) {
+        AuthResponse response = authService.login(loginRequest);
+        return ResponseEntity.ok(response);
+    }
 }

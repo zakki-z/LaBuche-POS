@@ -7,26 +7,33 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
- * Utility to retrieve the current authenticated user from the request attribute
- * set by SimpleAuthFilter.
+ * Utility to retrieve the current user from the request attribute.
+ * Returns null if no user is authenticated (anonymous access).
  */
 @Component
 public class CurrentUserProvider {
 
     public User getCurrentUser() {
         ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-        if (attrs == null) {
-            throw new IllegalStateException("No request context available");
-        }
+        if (attrs == null) return null;
         HttpServletRequest request = attrs.getRequest();
-        User user = (User) request.getAttribute("currentUser");
+        return (User) request.getAttribute("currentUser");
+    }
+
+    /**
+     * Returns the current user or throws if not authenticated.
+     * Use this in endpoints that require authentication.
+     */
+    public User requireCurrentUser() {
+        User user = getCurrentUser();
         if (user == null) {
-            throw new IllegalStateException("No authenticated user in request");
+            throw new IllegalStateException("Authentication required");
         }
         return user;
     }
 
     public String getCurrentUsername() {
-        return getCurrentUser().getUsername();
+        User user = getCurrentUser();
+        return user != null ? user.getUsername() : null;
     }
 }

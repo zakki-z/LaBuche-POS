@@ -1,7 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { products as productsApi, categories as categoriesApi, orders as ordersApi, getUsername, type Product, type Category } from '@/lib/api';
+import { products as productsApi, categories as categoriesApi, orders as ordersApi, getUsername, hasSession, type Product, type Category } from '@/lib/api';
 import { generateReceiptPDF } from '@/lib/receipt-generator';
+import AuthPrompt from '../../AuthPrompt';
 
 type CartItem = Product & { quantity: number };
 
@@ -12,6 +13,7 @@ export default function POS() {
     const [cart, setCart] = useState<CartItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [checkingOut, setCheckingOut] = useState(false);
+    const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
     useEffect(() => {
         Promise.all([productsApi.getAll(), categoriesApi.getAll()])
@@ -52,8 +54,24 @@ export default function POS() {
     const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-    const handleCheckout = async () => {
+    const handleCheckoutClick = () => {
         if (cart.length === 0) return;
+
+        // If not logged in, show auth prompt first
+        if (!hasSession()) {
+            setShowAuthPrompt(true);
+            return;
+        }
+
+        performCheckout();
+    };
+
+    const handleAuthSuccess = () => {
+        setShowAuthPrompt(false);
+        performCheckout();
+    };
+
+    const performCheckout = async () => {
         setCheckingOut(true);
 
         const description = cart.map(c => `${c.name} x${c.quantity}`).join(', ');
@@ -70,7 +88,7 @@ export default function POS() {
 
             generateReceiptPDF({
                 orderId: createdOrder.id,
-                username: getUsername() || 'Unknown',
+                username: getUsername() || 'Guest',
                 items: cart.map(item => ({
                     id: item.id,
                     name: item.name,
@@ -94,10 +112,7 @@ export default function POS() {
     return (
         <div className="animate-in">
             <div className="mb-6">
-                <h1
-                    className="text-2xl font-bold tracking-tight"
-                    style={{ fontFamily: 'Playfair Display, serif' }}
-                >
+                <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Playfair Display, serif' }}>
                     Point of Sale
                 </h1>
                 <p className="text-sm text-[var(--text-muted)] mt-1">Tap a product to add it to the current order</p>
@@ -106,7 +121,6 @@ export default function POS() {
             <div className="flex gap-6 items-start">
                 {/* Product grid */}
                 <div className="flex-1">
-                    {/* Category filter tabs */}
                     {categoryList.length > 0 && (
                         <div className="flex gap-2 mb-4 flex-wrap">
                             <button
@@ -177,9 +191,7 @@ export default function POS() {
 
                         <div className="p-5">
                             {cart.length === 0 ? (
-                                <p className="text-sm text-[var(--text-muted)] text-center py-8">
-                                    Cart is empty
-                                </p>
+                                <p className="text-sm text-[var(--text-muted)] text-center py-8">Cart is empty</p>
                             ) : (
                                 <div className="space-y-3 mb-4">
                                     {cart.map(item => (
@@ -189,24 +201,12 @@ export default function POS() {
                                                 <div className="text-xs text-[var(--text-muted)]">${item.price.toFixed(2)} each</div>
                                             </div>
                                             <div className="flex items-center gap-1.5">
-                                                <button
-                                                    onClick={() => updateQuantity(item.id, -1)}
-                                                    className="w-7 h-7 rounded-md bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--border)] transition text-sm font-bold"
-                                                >
-                                                    −
-                                                </button>
+                                                <button onClick={() => updateQuantity(item.id, -1)} className="w-7 h-7 rounded-md bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--border)] transition text-sm font-bold">−</button>
                                                 <span className="w-6 text-center text-sm font-semibold">{item.quantity}</span>
-                                                <button
-                                                    onClick={() => updateQuantity(item.id, 1)}
-                                                    className="w-7 h-7 rounded-md bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--border)] transition text-sm font-bold"
-                                                >
-                                                    +
-                                                </button>
+                                                <button onClick={() => updateQuantity(item.id, 1)} className="w-7 h-7 rounded-md bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--border)] transition text-sm font-bold">+</button>
                                             </div>
                                             <div className="text-sm font-bold w-16 text-right">${(item.price * item.quantity).toFixed(2)}</div>
-                                            <button onClick={() => removeFromCart(item.id)} className="text-[var(--text-muted)] hover:text-[var(--danger)] transition text-xs ml-1">
-                                                ✕
-                                            </button>
+                                            <button onClick={() => removeFromCart(item.id)} className="text-[var(--text-muted)] hover:text-[var(--danger)] transition text-xs ml-1">✕</button>
                                         </div>
                                     ))}
                                 </div>
@@ -219,18 +219,32 @@ export default function POS() {
                                         <span className="text-xl font-black text-[var(--accent)]">${total.toFixed(2)}</span>
                                     </div>
                                     <button
-                                        onClick={handleCheckout}
+                                        onClick={handleCheckoutClick}
                                         disabled={checkingOut}
                                         className="btn btn-success w-full py-3 disabled:opacity-60"
                                     >
-                                        {checkingOut ? 'Processing…' : 'Checkout & Download Receipt'}
+                                        {checkingOut ? 'Processing…' : hasSession() ? 'Checkout & Download Receipt' : 'Sign In & Checkout'}
                                     </button>
+                                    {!hasSession() && (
+                                        <p className="text-xs text-[var(--text-muted)] text-center mt-2">
+                                            You&apos;ll be asked to sign in to complete the order
+                                        </p>
+                                    )}
                                 </>
                             )}
                         </div>
                     </div>
                 </div>
             </div>
+
+            {/* Auth prompt for checkout */}
+            {showAuthPrompt && (
+                <AuthPrompt
+                    actionLabel="Sign in to complete your checkout"
+                    onSuccess={handleAuthSuccess}
+                    onCancel={() => setShowAuthPrompt(false)}
+                />
+            )}
         </div>
     );
 }

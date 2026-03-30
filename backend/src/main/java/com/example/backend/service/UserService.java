@@ -19,13 +19,12 @@ public class UserService {
         this.userRepository = userRepository;
     }
 
-    /**
-     * Simple role check — replaces @PreAuthorize("hasAuthority('ADMIN')").
-     * Reads the current user from the request attribute set by SimpleAuthFilter.
-     */
     public void requireAdmin(HttpServletRequest request) {
         User currentUser = (User) request.getAttribute("currentUser");
-        if (currentUser == null || currentUser.getRole() != ERole.ADMIN) {
+        if (currentUser == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
+        }
+        if (currentUser.getRole() != ERole.ADMIN) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin access required");
         }
     }

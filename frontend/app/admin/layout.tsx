@@ -2,7 +2,8 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { getAccessToken, getUserRole } from '@/lib/api';
+import { getUserRole, hasSession } from '@/lib/api';
+import AuthPrompt from "@/components/AuthPrompt";
 
 const adminLinks = [
     { href: '/admin', label: 'Dashboard', icon: '◫' },
@@ -15,26 +16,36 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const pathname = usePathname();
     const router = useRouter();
     const [authorized, setAuthorized] = useState(false);
+    const [showAuth, setShowAuth] = useState(false);
     const [checking, setChecking] = useState(true);
 
     useEffect(() => {
-        const token = getAccessToken();
-        if (!token) {
-            router.replace('/login');
-            return;
+        if (hasSession() && getUserRole() === 'ADMIN') {
+            setAuthorized(true);
+            setChecking(false);
+        } else {
+            // Not admin — show the auth prompt
+            setShowAuth(true);
+            setChecking(false);
         }
+    }, []);
 
-        const role = getUserRole();
-        if (role !== 'ADMIN') {
-            router.replace('/pos');
-            return;
+    const handleAuthSuccess = (_username: string, role: string) => {
+        setShowAuth(false);
+        if (role === 'ADMIN') {
+            setAuthorized(true);
+        } else {
+            // They logged in but not as admin
+            router.push('/pos');
         }
+    };
 
-        setAuthorized(true);
-        setChecking(false);
-    }, [router]);
+    const handleAuthCancel = () => {
+        setShowAuth(false);
+        router.push('/pos');
+    };
 
-    if (checking || !authorized) {
+    if (checking) {
         return (
             <div className="flex gap-6 animate-in">
                 <div className="flex-1 text-center py-20 text-[var(--text-muted)]">
@@ -44,9 +55,23 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         );
     }
 
+    if (showAuth) {
+        return (
+            <AuthPrompt
+                actionLabel="Admin panel requires manager credentials"
+                requireAdmin={true}
+                onSuccess={handleAuthSuccess}
+                onCancel={handleAuthCancel}
+            />
+        );
+    }
+
+    if (!authorized) {
+        return null;
+    }
+
     return (
         <div className="flex gap-6 animate-in">
-            {/* Sidebar */}
             <aside className="w-56 shrink-0 sticky top-24 self-start">
                 <div className="card-flat p-3">
                     <div className="px-3 py-2 mb-2">
@@ -73,8 +98,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     </nav>
                 </div>
             </aside>
-
-            {/* Main content */}
             <div className="flex-1 min-w-0">{children}</div>
         </div>
     );
