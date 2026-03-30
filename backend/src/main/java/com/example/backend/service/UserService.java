@@ -1,33 +1,48 @@
 package com.example.backend.service;
 
+import com.example.backend.entity.ERole;
 import com.example.backend.entity.User;
 import com.example.backend.exception.UserNotFoundException;
 import com.example.backend.repository.UserRepository;
-import org.springframework.security.access.prepost.PreAuthorize;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
 @Service
 public class UserService {
     private final UserRepository userRepository;
+
     public UserService(UserRepository userRepository) {
         this.userRepository = userRepository;
     }
-    @PreAuthorize("hasAuthority('ADMIN')")
+
+    /**
+     * Simple role check — replaces @PreAuthorize("hasAuthority('ADMIN')").
+     * Reads the current user from the request attribute set by SimpleAuthFilter.
+     */
+    public void requireAdmin(HttpServletRequest request) {
+        User currentUser = (User) request.getAttribute("currentUser");
+        if (currentUser == null || currentUser.getRole() != ERole.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin access required");
+        }
+    }
+
     public List<User> getAllUsers() {
         return userRepository.findAll();
     }
-    @PreAuthorize("hasAuthority('ADMIN')")
+
     public User getUserById(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found for ID: " + userId));
     }
-    @PreAuthorize("hasAuthority('ADMIN')")
+
     public User addNewUser(User user) {
         return userRepository.save(user);
     }
-    @PreAuthorize("hasAuthority('ADMIN')")
+
     public User updateUser(Long userId, User updatedUser) {
         User existingUser = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found for ID: " + userId));
@@ -35,7 +50,7 @@ public class UserService {
         existingUser.setPassword(updatedUser.getPassword());
         return userRepository.save(existingUser);
     }
-    @PreAuthorize("hasAuthority('ADMIN')")
+
     public void deleteUser(Long userId) {
         userRepository.deleteById(userId);
     }
