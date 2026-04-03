@@ -14,9 +14,6 @@ function log(level: 'info' | 'warn' | 'error', message: string, data?: unknown) 
 }
 
 // ── Session helpers ───────────────────────────────────────
-// "session" user = the user who authenticated for actions (checkout, etc.)
-// "admin" session = one-time admin auth for admin panel access
-
 export function getUsername(): string | null {
     if (typeof window === 'undefined') return null;
     return localStorage.getItem('username');
@@ -27,7 +24,6 @@ export function getUserRole(): string | null {
     return localStorage.getItem('userRole');
 }
 
-/** Backward compat — components check this to see if logged in */
 export function getAccessToken(): string | null {
     return getUsername();
 }
@@ -118,14 +114,13 @@ async function request<T>(
 // ── Types ─────────────────────────────────────────────────
 export type Category = { id: number; name: string };
 export type Product = { id: number; name: string; price: number; categoryId: number | null; categoryName: string | null };
-export type Order = { id: number; description: string; totalPrice: number; quantity: number; paidAmount: number; remainingAmount: number };
+export type Order = { id: number; description: string; totalPrice: number; quantity: number; paidAmount: number; remainingAmount: number; username?: string };
 export type AuthResponse = { username: string; role: string };
 export type TokenPair = AuthResponse;
 export type UserInfo = { id: number; username: string; role: string };
 
 // ── Auth endpoints ────────────────────────────────────────
 export const auth = {
-    /** Login and store session */
     async login(username: string, password: string): Promise<AuthResponse> {
         const data = await request<AuthResponse>('/auth/login', {
             method: 'POST',
@@ -135,7 +130,6 @@ export const auth = {
         return data;
     },
 
-    /** Verify credentials without storing session (for on-demand auth) */
     async verify(username: string, password: string): Promise<AuthResponse> {
         return request<AuthResponse>('/auth/verify', {
             method: 'POST',

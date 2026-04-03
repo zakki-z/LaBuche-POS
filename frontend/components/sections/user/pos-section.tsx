@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { products as productsApi, categories as categoriesApi, orders as ordersApi, getUsername, hasSession, type Product, type Category } from '@/lib/api';
+import { products as productsApi, categories as categoriesApi, orders as ordersApi, getUsername, hasSession, auth, type Product, type Category } from '@/lib/api';
 import { generateReceiptPDF } from '@/lib/receipt-generator';
 import AuthPrompt from '../../AuthPrompt';
 
@@ -14,6 +14,7 @@ export default function POS() {
     const [loading, setLoading] = useState(true);
     const [checkingOut, setCheckingOut] = useState(false);
     const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+    const [successMessage, setSuccessMessage] = useState('');
 
     useEffect(() => {
         Promise.all([productsApi.getAll(), categoriesApi.getAll()])
@@ -57,7 +58,6 @@ export default function POS() {
     const handleCheckoutClick = () => {
         if (cart.length === 0) return;
 
-        // If not logged in, show auth prompt first
         if (!hasSession()) {
             setShowAuthPrompt(true);
             return;
@@ -84,11 +84,12 @@ export default function POS() {
         };
 
         try {
+            const currentUsername = getUsername() || 'Guest';
             const createdOrder = await ordersApi.create(orderData);
 
             generateReceiptPDF({
                 orderId: createdOrder.id,
-                username: getUsername() || 'Guest',
+                username: currentUsername,
                 items: cart.map(item => ({
                     id: item.id,
                     name: item.name,
@@ -101,7 +102,12 @@ export default function POS() {
             });
 
             setCart([]);
-            alert('Checkout successful! Your receipt has been downloaded.');
+
+            // Sign out after successful checkout
+            auth.logout();
+
+            setSuccessMessage('Checkout successful! Receipt downloaded. You have been signed out.');
+            setTimeout(() => setSuccessMessage(''), 4000);
         } catch {
             alert('Checkout failed. Please try again.');
         } finally {
@@ -117,6 +123,12 @@ export default function POS() {
                 </h1>
                 <p className="text-sm text-[var(--text-muted)] mt-1">Tap a product to add it to the current order</p>
             </div>
+
+            {successMessage && (
+                <div className="mb-4 p-4 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm font-medium animate-in">
+                    {successMessage}
+                </div>
+            )}
 
             <div className="flex gap-6 items-start">
                 {/* Product grid */}
@@ -223,13 +235,11 @@ export default function POS() {
                                         disabled={checkingOut}
                                         className="btn btn-success w-full py-3 disabled:opacity-60"
                                     >
-                                        {checkingOut ? 'Processing…' : hasSession() ? 'Checkout & Download Receipt' : 'Sign In & Checkout'}
+                                        {checkingOut ? 'Processing…' : 'Sign In & Checkout'}
                                     </button>
-                                    {!hasSession() && (
-                                        <p className="text-xs text-[var(--text-muted)] text-center mt-2">
-                                            You&apos;ll be asked to sign in to complete the order
-                                        </p>
-                                    )}
+                                    <p className="text-xs text-[var(--text-muted)] text-center mt-2">
+                                        You&apos;ll be signed in for this transaction only
+                                    </p>
                                 </>
                             )}
                         </div>

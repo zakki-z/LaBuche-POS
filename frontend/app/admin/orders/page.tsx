@@ -1,10 +1,11 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { orders as ordersApi, type Order, ApiError } from '@/lib/api';
 
 export default function AdminOrders() {
     const [orderList, setOrderList] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
+    const [selectedUser, setSelectedUser] = useState<string | null>(null);
 
     // Edit modal
     const [editingOrder, setEditingOrder] = useState<Order | null>(null);
@@ -31,6 +32,29 @@ export default function AdminOrders() {
             setLoading(false);
         }
     };
+
+    // Derive unique users and filtered orders
+    const uniqueUsers = useMemo(() => {
+        const users = new Set<string>();
+        orderList.forEach(o => {
+            if (o.username) users.add(o.username);
+        });
+        return Array.from(users).sort();
+    }, [orderList]);
+
+    const filteredOrders = useMemo(() => {
+        if (!selectedUser) return orderList;
+        return orderList.filter(o => o.username === selectedUser);
+    }, [orderList, selectedUser]);
+
+    // Totals for filtered orders
+    const totals = useMemo(() => {
+        const totalRevenue = filteredOrders.reduce((sum, o) => sum + (o.totalPrice ?? 0), 0);
+        const totalPaid = filteredOrders.reduce((sum, o) => sum + (o.paidAmount ?? 0), 0);
+        const totalRemaining = filteredOrders.reduce((sum, o) => sum + (o.remainingAmount ?? 0), 0);
+        const totalItems = filteredOrders.reduce((sum, o) => sum + (o.quantity ?? 0), 0);
+        return { totalRevenue, totalPaid, totalRemaining, totalItems, orderCount: filteredOrders.length };
+    }, [filteredOrders]);
 
     const openEdit = (order: Order) => {
         setEditForm({
@@ -96,7 +120,6 @@ export default function AdminOrders() {
         }
     };
 
-    // Auto-calculate remaining when paid changes
     const handlePaidChange = (value: string) => {
         const paid = parseFloat(value) || 0;
         const total = parseFloat(editForm.totalPrice) || 0;
@@ -128,31 +151,107 @@ export default function AdminOrders() {
                 </h1>
                 <p className="text-sm text-[var(--text-muted)] mt-1">
                     {orderList.length} order{orderList.length !== 1 ? 's' : ''} total
+                    {selectedUser && ` · Showing ${filteredOrders.length} for ${selectedUser}`}
                 </p>
             </div>
 
+            {/* ── Summary Cards ──────────────────────────── */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+                {[
+                    { label: 'Orders', value: totals.orderCount, color: 'var(--accent)', bg: 'var(--accent-soft)', icon: '▤' },
+                    { label: 'Items Sold', value: totals.totalItems, color: 'var(--accent)', bg: 'var(--accent-soft)', icon: '▦' },
+                    { label: 'Total Revenue', value: `$${totals.totalRevenue.toFixed(2)}`, color: 'var(--accent)', bg: 'var(--accent-soft)', icon: '◆' },
+                    { label: 'Paid', value: `$${totals.totalPaid.toFixed(2)}`, color: 'var(--success)', bg: '#dcfce7', icon: '✓' },
+                    { label: 'Outstanding', value: `$${totals.totalRemaining.toFixed(2)}`, color: 'var(--danger)', bg: '#fef2f2', icon: '◇' },
+                ].map((stat, i) => (
+                    <div
+                        key={stat.label}
+                        className="card p-4 animate-in"
+                        style={{ animationDelay: `${i * 40}ms` }}
+                    >
+                        <div
+                            className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 font-bold text-xs"
+                            style={{ backgroundColor: stat.bg, color: stat.color }}
+                        >
+                            {stat.icon}
+                        </div>
+                        <div className="text-xl font-black tracking-tight" style={{ color: stat.color }}>
+                            {stat.value}
+                        </div>
+                        <div className="text-xs text-[var(--text-muted)] mt-0.5 font-medium">{stat.label}</div>
+                    </div>
+                ))}
+            </div>
+
+            {/* ── User Filter ────────────────────────────── */}
+            {uniqueUsers.length > 0 && (
+                <div className="mb-4">
+                    <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-2">Filter by User</p>
+                    <div className="flex gap-2 flex-wrap">
+                        <button
+                            onClick={() => setSelectedUser(null)}
+                            className={`px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
+                                selectedUser === null
+                                    ? 'text-white bg-[var(--accent)] shadow-sm'
+                                    : 'text-[var(--text-secondary)] bg-[var(--bg-muted)] hover:bg-[var(--border)]'
+                            }`}
+                        >
+                            All Users
+                        </button>
+                        {uniqueUsers.map(user => {
+                            const userOrderCount = orderList.filter(o => o.username === user).length;
+                            return (
+                                <button
+                                    key={user}
+                                    onClick={() => setSelectedUser(user)}
+                                    className={`px-3.5 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${
+                                        selectedUser === user
+                                            ? 'text-white bg-[var(--accent)] shadow-sm'
+                                            : 'text-[var(--text-secondary)] bg-[var(--bg-muted)] hover:bg-[var(--border)]'
+                                    }`}
+                                >
+                                    <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">
+                                        {user.charAt(0).toUpperCase()}
+                                    </span>
+                                    {user}
+                                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                                        selectedUser === user ? 'bg-white/20' : 'bg-[var(--border)]'
+                                    }`}>
+                                        {userOrderCount}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* ── Orders Table ───────────────────────────── */}
             <div className="card-flat overflow-hidden">
                 {loading ? (
                     <div className="text-center py-16 text-[var(--text-muted)]">Loading orders…</div>
-                ) : orderList.length === 0 ? (
+                ) : filteredOrders.length === 0 ? (
                     <div className="text-center py-16">
                         <div className="text-4xl mb-3 opacity-30">▤</div>
-                        <p className="text-[var(--text-muted)] text-sm">No orders found.</p>
+                        <p className="text-[var(--text-muted)] text-sm">
+                            {selectedUser ? `No orders found for ${selectedUser}.` : 'No orders found.'}
+                        </p>
                     </div>
                 ) : (
                     <div className="divide-y divide-[var(--border)]">
                         {/* Table header */}
                         <div className="flex items-center px-5 py-3 bg-[var(--bg-muted)] text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
                             <div className="w-16">ID</div>
+                            <div className="w-28">User</div>
                             <div className="flex-1">Description</div>
                             <div className="w-20 text-right">Items</div>
                             <div className="w-24 text-right">Total</div>
                             <div className="w-24 text-right">Paid</div>
                             <div className="w-24 text-right">Status</div>
-                            <div className="w-40 text-right">Actions</div>
+                            <div className="w-32 text-right">Actions</div>
                         </div>
 
-                        {orderList.map((order, index) => (
+                        {filteredOrders.map((order, index) => (
                             <div
                                 key={order.id}
                                 className="flex items-center px-5 py-4 hover:bg-[var(--bg-base)] transition group cursor-pointer"
@@ -162,6 +261,16 @@ export default function AdminOrders() {
                                 <div className="w-16">
                                     <div className="w-8 h-8 rounded-lg bg-[var(--accent-soft)] flex items-center justify-center text-[var(--accent)] font-bold text-xs">
                                         #{order.id}
+                                    </div>
+                                </div>
+                                <div className="w-28">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-[var(--bg-muted)] border border-[var(--border)] flex items-center justify-center text-[var(--text-secondary)] font-bold text-[10px]">
+                                            {(order.username || '?').charAt(0).toUpperCase()}
+                                        </div>
+                                        <span className="text-sm font-medium text-[var(--text-primary)] truncate">
+                                            {order.username || '—'}
+                                        </span>
                                     </div>
                                 </div>
                                 <div className="flex-1 min-w-0">
@@ -187,7 +296,7 @@ export default function AdminOrders() {
                                         </span>
                                     )}
                                 </div>
-                                <div className="w-40 flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                                <div className="w-32 flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                                     <button
                                         onClick={() => openEdit(order)}
                                         className="px-3 py-1.5 rounded-lg text-xs font-semibold text-[var(--text-secondary)] bg-[var(--bg-muted)] hover:bg-[var(--border)] transition"
@@ -203,6 +312,32 @@ export default function AdminOrders() {
                                 </div>
                             </div>
                         ))}
+
+                        {/* Table footer with totals */}
+                        <div className="flex items-center px-5 py-3 bg-[var(--bg-muted)] text-sm font-semibold">
+                            <div className="w-16"></div>
+                            <div className="w-28"></div>
+                            <div className="flex-1 text-[var(--text-secondary)]">
+                                {filteredOrders.length} order{filteredOrders.length !== 1 ? 's' : ''}
+                            </div>
+                            <div className="w-20 text-right text-[var(--text-secondary)]">
+                                {totals.totalItems}
+                            </div>
+                            <div className="w-24 text-right font-bold text-[var(--accent)]">
+                                ${totals.totalRevenue.toFixed(2)}
+                            </div>
+                            <div className="w-24 text-right font-bold text-[var(--success)]">
+                                ${totals.totalPaid.toFixed(2)}
+                            </div>
+                            <div className="w-24 text-right">
+                                {totals.totalRemaining > 0 && (
+                                    <span className="text-xs font-bold text-[var(--danger)]">
+                                        ${totals.totalRemaining.toFixed(2)}
+                                    </span>
+                                )}
+                            </div>
+                            <div className="w-32"></div>
+                        </div>
                     </div>
                 )}
             </div>
@@ -224,6 +359,9 @@ export default function AdminOrders() {
                                         Order Details
                                     </h3>
                                     <p className="text-xs text-[var(--text-muted)]">
+                                        {selectedOrder.username && (
+                                            <span className="font-medium text-[var(--text-secondary)]">{selectedOrder.username} · </span>
+                                        )}
                                         {selectedOrder.quantity} item{selectedOrder.quantity !== 1 ? 's' : ''}
                                     </p>
                                 </div>
@@ -235,6 +373,19 @@ export default function AdminOrders() {
                                 ✕
                             </button>
                         </div>
+
+                        {/* User info */}
+                        {selectedOrder.username && (
+                            <div className="px-6 py-3 border-b border-[var(--border)] flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-[var(--bg-muted)] border border-[var(--border)] flex items-center justify-center text-[var(--text-secondary)] font-bold text-xs">
+                                    {selectedOrder.username.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                    <p className="text-sm font-semibold text-[var(--text-primary)]">{selectedOrder.username}</p>
+                                    <p className="text-xs text-[var(--text-muted)]">Cashier</p>
+                                </div>
+                            </div>
+                        )}
 
                         <div className="px-6 py-4">
                             <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-3">Items</p>
@@ -299,7 +450,9 @@ export default function AdminOrders() {
                                 <h3 className="font-bold text-[var(--text-primary)] text-lg" style={{ fontFamily: 'Playfair Display, serif' }}>
                                     Edit Order #{editingOrder.id}
                                 </h3>
-                                <p className="text-xs text-[var(--text-muted)]">Update order details</p>
+                                <p className="text-xs text-[var(--text-muted)]">
+                                    {editingOrder.username && `${editingOrder.username} · `}Update order details
+                                </p>
                             </div>
                             <button
                                 onClick={closeEdit}
@@ -402,7 +555,8 @@ export default function AdminOrders() {
                             </div>
                         </div>
                         <p className="text-sm text-[var(--text-secondary)] mb-5">
-                            Are you sure you want to delete <strong>Order #{deleteTarget.id}</strong>? This will permanently remove it.
+                            Are you sure you want to delete <strong>Order #{deleteTarget.id}</strong>
+                            {deleteTarget.username && <> by <strong>{deleteTarget.username}</strong></>}? This will permanently remove it.
                         </p>
                         <div className="flex gap-2">
                             <button onClick={() => setDeleteTarget(null)} className="btn btn-ghost flex-1 py-2.5">Cancel</button>

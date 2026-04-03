@@ -1,8 +1,8 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { getUserRole, hasSession } from '@/lib/api';
+import { useEffect, useState, useRef } from 'react';
+import { getUserRole, hasSession, auth } from '@/lib/api';
 import AuthPrompt from "@/components/AuthPrompt";
 
 const adminLinks = [
@@ -18,24 +18,35 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const [authorized, setAuthorized] = useState(false);
     const [showAuth, setShowAuth] = useState(false);
     const [checking, setChecking] = useState(true);
+    const wasAuthorized = useRef(false);
 
     useEffect(() => {
         if (hasSession() && getUserRole() === 'ADMIN') {
             setAuthorized(true);
+            wasAuthorized.current = true;
             setChecking(false);
         } else {
-            // Not admin — show the auth prompt
             setShowAuth(true);
             setChecking(false);
         }
+    }, []);
+
+    // Sign out admin when navigating away from the admin area
+    useEffect(() => {
+        return () => {
+            // On unmount (leaving admin area), sign out
+            if (wasAuthorized.current && hasSession()) {
+                auth.logout();
+            }
+        };
     }, []);
 
     const handleAuthSuccess = (_username: string, role: string) => {
         setShowAuth(false);
         if (role === 'ADMIN') {
             setAuthorized(true);
+            wasAuthorized.current = true;
         } else {
-            // They logged in but not as admin
             router.push('/pos');
         }
     };

@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { products as productsApi, categories as categoriesApi, hasSession, type Product, type Category, ApiError } from '@/lib/api';
+import { products as productsApi, categories as categoriesApi, hasSession, auth, type Product, type Category, ApiError } from '@/lib/api';
 import AuthPrompt from '../../AuthPrompt';
 
 export default function Products() {
@@ -9,6 +9,7 @@ export default function Products() {
     const [newProduct, setNewProduct] = useState({ name: '', price: '', categoryId: '' });
     const [newCategory, setNewCategory] = useState('');
     const [loading, setLoading] = useState(true);
+    const [successMessage, setSuccessMessage] = useState('');
 
     // Auth prompt state
     const [showAuth, setShowAuth] = useState(false);
@@ -29,29 +30,53 @@ export default function Products() {
         }
     };
 
+    const showSuccess = (message: string) => {
+        setSuccessMessage(message);
+        setTimeout(() => setSuccessMessage(''), 3000);
+    };
+
+    const signOutAfterAction = () => {
+        if (hasSession()) {
+            auth.logout();
+        }
+    };
+
     const requireAuth = (label: string, action: () => Promise<void>) => {
         if (!hasSession()) {
             setAuthLabel(label);
             setPendingAction(() => action);
             setShowAuth(true);
         } else {
-            action().then(loadData).catch((err) => {
-                if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
-                    setAuthLabel(label);
-                    setPendingAction(() => action);
-                    setShowAuth(true);
-                } else {
-                    alert('Action failed. Please try again.');
-                }
-            });
+            action()
+                .then(() => {
+                    loadData();
+                    signOutAfterAction();
+                    showSuccess(`${label.replace('Sign in to ', '')} completed. You have been signed out.`);
+                })
+                .catch((err) => {
+                    if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+                        setAuthLabel(label);
+                        setPendingAction(() => action);
+                        setShowAuth(true);
+                    } else {
+                        alert('Action failed. Please try again.');
+                    }
+                });
         }
     };
 
     const handleAuthSuccess = () => {
         setShowAuth(false);
         if (pendingAction) {
-            pendingAction().then(loadData).catch(() => alert('Action failed.'));
+            const action = pendingAction;
             setPendingAction(null);
+            action()
+                .then(() => {
+                    loadData();
+                    signOutAfterAction();
+                    showSuccess('Action completed. You have been signed out.');
+                })
+                .catch(() => alert('Action failed.'));
         }
     };
 
@@ -97,6 +122,12 @@ export default function Products() {
                 <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Playfair Display, serif' }}>Products</h1>
                 <p className="text-sm text-[var(--text-muted)] mt-1">Manage your product catalog and categories</p>
             </div>
+
+            {successMessage && (
+                <div className="mb-4 p-4 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm font-medium animate-in">
+                    {successMessage}
+                </div>
+            )}
 
             <div className="card-flat p-6">
                 {/* Add category */}

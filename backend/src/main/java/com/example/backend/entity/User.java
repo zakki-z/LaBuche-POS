@@ -26,6 +26,9 @@ public class User {
 
     @NotNull
     private String password;
+    //TODO: add when Budges are connected
+//    @NotNull
+//    private int budgeNumber;
 
     private String email;
 
