@@ -1,5 +1,6 @@
 package com.example.backend.service;
 
+import com.example.backend.dto.request.BadgeLoginRequest;
 import com.example.backend.dto.request.LoginRequest;
 import com.example.backend.dto.request.RegisterRequest;
 import com.example.backend.dto.response.AuthResponse;
@@ -20,6 +21,12 @@ public class AuthService {
             throw new IllegalArgumentException("Username is already in use");
         }
 
+        if (registerRequest.getBadgeNumber() != null && !registerRequest.getBadgeNumber().isBlank()) {
+            if (userRepository.existsByBadgeNumber(registerRequest.getBadgeNumber())) {
+                throw new IllegalArgumentException("Badge number is already assigned to another user");
+            }
+        }
+
         // Default role to USER if not provided
         ERole role = registerRequest.getRole() != null ? registerRequest.getRole() : ERole.USER;
 
@@ -28,6 +35,7 @@ public class AuthService {
                 .password(registerRequest.getPassword())  // plain text, no hashing
                 .fullName(registerRequest.getFullName())
                 .email(registerRequest.getEmail())
+                .badgeNumber(registerRequest.getBadgeNumber())
                 .role(role)
                 .build();
 
@@ -41,6 +49,13 @@ public class AuthService {
         if (!user.getPassword().equals(loginRequest.getPassword())) {
             throw new IllegalArgumentException("Invalid username or password");
         }
+
+        return new AuthResponse(user.getUsername(), user.getRole().name());
+    }
+
+    public AuthResponse loginByBadge(BadgeLoginRequest request) {
+        User user = userRepository.findByBadgeNumber(request.getBadgeNumber())
+                .orElseThrow(() -> new IllegalArgumentException("No user found with this badge"));
 
         return new AuthResponse(user.getUsername(), user.getRole().name());
     }

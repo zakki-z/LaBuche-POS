@@ -28,5 +28,7 @@ public class RegisterRequest {
     @Size(min = 3, message = "Password must be at least 3 characters")
     private String password;
 
+    private String badgeNumber;
+
     private ERole role;
 }

@@ -21,20 +21,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const wasAuthorized = useRef(false);
 
     useEffect(() => {
-        if (hasSession() && getUserRole() === 'ADMIN') {
-            setAuthorized(true);
-            wasAuthorized.current = true;
-            setChecking(false);
-        } else {
-            setShowAuth(true);
-            setChecking(false);
-        }
-    }, []);
+        // Small delay so that if the navbar just set the session,
+        // it's available by the time we check.
+        const timer = setTimeout(() => {
+            if (hasSession() && getUserRole() === 'ADMIN') {
+                setAuthorized(true);
+                wasAuthorized.current = true;
+                setChecking(false);
+            } else if (hasSession() && getUserRole() !== 'ADMIN') {
+                router.push('/pos');
+            } else {
+                setShowAuth(true);
+                setChecking(false);
+            }
+        }, 50);
+        return () => clearTimeout(timer);
+    }, [router]);
 
     // Sign out admin when navigating away from the admin area
     useEffect(() => {
         return () => {
-            // On unmount (leaving admin area), sign out
             if (wasAuthorized.current && hasSession()) {
                 auth.logout();
             }

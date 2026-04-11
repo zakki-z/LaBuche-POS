@@ -2,7 +2,9 @@
 import { useState, useEffect } from 'react';
 import { products as productsApi, categories as categoriesApi, orders as ordersApi, getUsername, hasSession, auth, type Product, type Category } from '@/lib/api';
 import { generateReceiptPDF } from '@/lib/receipt-generator';
+import { useRfidScanner } from '@/lib/useRfidScanner';
 import AuthPrompt from '../../AuthPrompt';
+import CartSidebar from '../cartSidebar-section';
 
 type CartItem = Product & { quantity: number };
 
@@ -15,6 +17,7 @@ export default function POS() {
     const [checkingOut, setCheckingOut] = useState(false);
     const [showAuthPrompt, setShowAuthPrompt] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
+    const [badgeScanning, setBadgeScanning] = useState(false);
 
     useEffect(() => {
         Promise.all([productsApi.getAll(), categoriesApi.getAll()])
@@ -25,6 +28,24 @@ export default function POS() {
             .catch(console.error)
             .finally(() => setLoading(false));
     }, []);
+
+    useRfidScanner({
+        onScan: async (badgeNumber) => {
+            if (cart.length === 0 || showAuthPrompt || checkingOut) return;
+
+            setBadgeScanning(true);
+            try {
+                const result = await auth.badgeLogin(badgeNumber);
+                setBadgeScanning(false);
+                await performCheckoutAs(result.username);
+            } catch {
+                setBadgeScanning(false);
+                setSuccessMessage('');
+                setShowAuthPrompt(true);
+            }
+        },
+        enabled: !showAuthPrompt && !checkingOut && cart.length > 0,
+    });
 
     const filteredProducts = selectedCategory === null
         ? productList
@@ -42,13 +63,19 @@ export default function POS() {
         setCart(prev => prev.filter(item => item.id !== productId));
     };
 
-    const updateQuantity = (productId: number, delta: number) => {
+    const setQuantity = (productId: number, newQuantity: number) => {
         setCart(prev =>
-            prev.map(item => {
-                if (item.id !== productId) return item;
-                const newQty = item.quantity + delta;
-                return newQty <= 0 ? item : { ...item, quantity: newQty };
-            }).filter(item => item.quantity > 0)
+            prev.map(item =>
+                item.id === productId ? { ...item, quantity: newQuantity } : item
+            )
+        );
+    };
+
+    const updatePrice = (productId: number, newPrice: number) => {
+        setCart(prev =>
+            prev.map(item =>
+                item.id === productId ? { ...item, price: newPrice } : item
+            )
         );
     };
 
@@ -72,24 +99,26 @@ export default function POS() {
     };
 
     const performCheckout = async () => {
+        const currentUsername = getUsername() || 'Guest';
+        await performCheckoutAs(currentUsername);
+    };
+
+    const performCheckoutAs = async (username: string) => {
         setCheckingOut(true);
 
         const description = cart.map(c => `${c.name} x${c.quantity}`).join(', ');
         const orderData = {
             quantity: itemCount,
             totalPrice: total,
-            paidAmount: total,
-            remainingAmount: 0,
             description,
         };
 
         try {
-            const currentUsername = getUsername() || 'Guest';
             const createdOrder = await ordersApi.create(orderData);
 
             generateReceiptPDF({
                 orderId: createdOrder.id,
-                username: currentUsername,
+                username,
                 items: cart.map(item => ({
                     id: item.id,
                     name: item.name,
@@ -97,16 +126,13 @@ export default function POS() {
                     quantity: item.quantity,
                 })),
                 total,
-                paidAmount: total,
                 date: new Date(),
             });
 
             setCart([]);
-
-            // Sign out after successful checkout
             auth.logout();
 
-            setSuccessMessage('Checkout successful! Receipt downloaded. You have been signed out.');
+            setSuccessMessage(`Checkout successful! Receipt downloaded. Signed in as ${username} (now signed out).`);
             setTimeout(() => setSuccessMessage(''), 4000);
         } catch {
             alert('Checkout failed. Please try again.');
@@ -116,8 +142,8 @@ export default function POS() {
     };
 
     return (
-        <div className="animate-in">
-            <div className="mb-6">
+        <div className="animate-in min-h-[calc(100vh-2rem)] -mx-6 px-1">
+            <div className="pb-3">
                 <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Playfair Display, serif' }}>
                     Point of Sale
                 </h1>
@@ -190,64 +216,19 @@ export default function POS() {
                         </div>
                     )}
                 </div>
-
                 {/* Cart sidebar */}
-                <div className="w-80 shrink-0 sticky top-24">
-                    <div className="card-flat overflow-hidden">
-                        <div className="px-5 py-4 border-b border-[var(--border)] bg-[var(--bg-muted)]">
-                            <h3 className="font-bold text-[var(--text-primary)]">Current Order</h3>
-                            {itemCount > 0 && (
-                                <span className="text-xs text-[var(--text-muted)]">{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
-                            )}
-                        </div>
-
-                        <div className="p-5">
-                            {cart.length === 0 ? (
-                                <p className="text-sm text-[var(--text-muted)] text-center py-8">Cart is empty</p>
-                            ) : (
-                                <div className="space-y-3 mb-4">
-                                    {cart.map(item => (
-                                        <div key={item.id} className="flex items-center justify-between gap-2">
-                                            <div className="flex-1 min-w-0">
-                                                <div className="text-sm font-medium truncate">{item.name}</div>
-                                                <div className="text-xs text-[var(--text-muted)]">${item.price.toFixed(2)} each</div>
-                                            </div>
-                                            <div className="flex items-center gap-1.5">
-                                                <button onClick={() => updateQuantity(item.id, -1)} className="w-7 h-7 rounded-md bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--border)] transition text-sm font-bold">−</button>
-                                                <span className="w-6 text-center text-sm font-semibold">{item.quantity}</span>
-                                                <button onClick={() => updateQuantity(item.id, 1)} className="w-7 h-7 rounded-md bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--border)] transition text-sm font-bold">+</button>
-                                            </div>
-                                            <div className="text-sm font-bold w-16 text-right">${(item.price * item.quantity).toFixed(2)}</div>
-                                            <button onClick={() => removeFromCart(item.id)} className="text-[var(--text-muted)] hover:text-[var(--danger)] transition text-xs ml-1">✕</button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            {cart.length > 0 && (
-                                <>
-                                    <div className="border-t border-[var(--border)] pt-3 flex justify-between items-center mb-4">
-                                        <span className="font-bold text-[var(--text-primary)]">Total</span>
-                                        <span className="text-xl font-black text-[var(--accent)]">${total.toFixed(2)}</span>
-                                    </div>
-                                    <button
-                                        onClick={handleCheckoutClick}
-                                        disabled={checkingOut}
-                                        className="btn btn-success w-full py-3 disabled:opacity-60"
-                                    >
-                                        {checkingOut ? 'Processing…' : 'Sign In & Checkout'}
-                                    </button>
-                                    <p className="text-xs text-[var(--text-muted)] text-center mt-2">
-                                        You&apos;ll be signed in for this transaction only
-                                    </p>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                </div>
+                <CartSidebar
+                    cart={cart}
+                    onUpdateQuantity={setQuantity}
+                    onRemoveFromCart={removeFromCart}
+                    onUpdatePrice={updatePrice}
+                    onResetOrder={() => setCart([])}
+                    onCheckoutClick={handleCheckoutClick}
+                    checkingOut={checkingOut}
+                    badgeScanning={badgeScanning}
+                />
             </div>
 
-            {/* Auth prompt for checkout */}
             {showAuthPrompt && (
                 <AuthPrompt
                     actionLabel="Sign in to complete your checkout"

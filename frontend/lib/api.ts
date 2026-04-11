@@ -114,10 +114,10 @@ async function request<T>(
 // ── Types ─────────────────────────────────────────────────
 export type Category = { id: number; name: string };
 export type Product = { id: number; name: string; price: number; categoryId: number | null; categoryName: string | null };
-export type Order = { id: number; description: string; totalPrice: number; quantity: number; paidAmount: number; remainingAmount: number; username?: string };
+export type Order = { id: number; description: string; totalPrice: number; quantity: number; username?: string; createdAt?: string };
 export type AuthResponse = { username: string; role: string };
 export type TokenPair = AuthResponse;
-export type UserInfo = { id: number; username: string; role: string };
+export type UserInfo = { id: number; username: string; role: string; badgeNumber?: string };
 
 // ── Auth endpoints ────────────────────────────────────────
 export const auth = {
@@ -130,6 +130,15 @@ export const auth = {
         return data;
     },
 
+    async badgeLogin(badgeNumber: string): Promise<AuthResponse> {
+        const data = await request<AuthResponse>('/auth/badge-login', {
+            method: 'POST',
+            body: JSON.stringify({ badgeNumber }),
+        });
+        setSession(data.username, data.role);
+        return data;
+    },
+
     async verify(username: string, password: string): Promise<AuthResponse> {
         return request<AuthResponse>('/auth/verify', {
             method: 'POST',
@@ -137,10 +146,10 @@ export const auth = {
         });
     },
 
-    async register(fullName: string, username: string, password: string, role: string): Promise<string> {
+    async register(fullName: string, username: string, password: string, role: string, badgeNumber?: string): Promise<string> {
         return request<string>('/auth/register', {
             method: 'POST',
-            body: JSON.stringify({ fullName, username, password, role }),
+            body: JSON.stringify({ fullName, username, password, role, badgeNumber: badgeNumber || null }),
         });
     },
 
@@ -175,7 +184,7 @@ export const categories = {
 export const orders = {
     async getAll(u?: string): Promise<Order[]> { return request<Order[]>('/v1.0/orders', {}, u); },
     async getById(id: number, u?: string): Promise<Order> { return request<Order>(`/v1.0/orders/${id}`, {}, u); },
-    async create(order: { quantity: number; totalPrice: number; paidAmount: number; remainingAmount: number; description: string }, u?: string): Promise<Order> {
+    async create(order: { quantity: number; totalPrice: number; description: string }, u?: string): Promise<Order> {
         return request<Order>('/v1.0/orders', { method: 'POST', body: JSON.stringify(order) }, u);
     },
     async update(id: number, order: Partial<Order>, u?: string): Promise<Order> {
@@ -188,7 +197,7 @@ export const orders = {
 export const users = {
     async getAll(u?: string): Promise<UserInfo[]> { return request<UserInfo[]>('/users', {}, u); },
     async getById(id: number, u?: string): Promise<UserInfo> { return request<UserInfo>(`/users/${id}`, {}, u); },
-    async update(id: number, user: { username?: string; password?: string }, u?: string): Promise<UserInfo> {
+    async update(id: number, user: { username?: string; password?: string; badgeNumber?: string }, u?: string): Promise<UserInfo> {
         return request<UserInfo>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(user) }, u);
     },
     async delete(id: number, u?: string): Promise<void> { await request<void>(`/users/${id}`, { method: 'DELETE' }, u); },

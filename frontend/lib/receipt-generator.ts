@@ -12,7 +12,6 @@ type ReceiptData = {
     username: string;
     items: CartItem[];
     total: number;
-    paidAmount: number;
     date: Date;
 };
 
@@ -199,24 +198,6 @@ export function generateReceiptPDF(data: ReceiptData): void {
     const totalStr = `$${data.total.toFixed(2)}`;
     const totalW = doc.getTextWidth(totalStr);
     doc.text(totalStr, pageWidth - margin - totalW, y);
-    y += lineHeight + 2;
-
-    // Paid amount
-    doc.setTextColor(80, 80, 80);
-    leftText('Paid', y, 7);
-    rightText(`$${data.paidAmount.toFixed(2)}`, y, 7);
-    y += lineHeight;
-
-    // Change
-    const change = data.paidAmount - data.total;
-    if (change >= 0) {
-        leftText('Change', y, 7);
-        rightText(`$${change.toFixed(2)}`, y, 7);
-    } else {
-        leftText('Remaining', y, 7);
-        doc.setTextColor(220, 38, 38);
-        rightText(`$${Math.abs(change).toFixed(2)}`, y, 7);
-    }
     y += sectionGap + 3;
 
     drawDashedLine(y);

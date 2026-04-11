@@ -1,5 +1,6 @@
 package com.example.backend.controller;
 
+import com.example.backend.dto.request.BadgeLoginRequest;
 import com.example.backend.dto.request.LoginRequest;
 import com.example.backend.dto.request.RegisterRequest;
 import com.example.backend.dto.response.AuthResponse;
@@ -28,6 +29,16 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest loginRequest) {
         AuthResponse response = authService.login(loginRequest);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Login using an RFID badge number.
+     * The badge reader sends the card UID; we look up the user by badge.
+     */
+    @PostMapping("/badge-login")
+    public ResponseEntity<?> badgeLogin(@Valid @RequestBody BadgeLoginRequest request) {
+        AuthResponse response = authService.loginByBadge(request);
         return ResponseEntity.ok(response);
     }
 

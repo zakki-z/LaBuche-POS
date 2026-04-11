@@ -1,15 +1,26 @@
-// app/register/page.tsx
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { auth } from '@/lib/api';
+import { useRfidScanner } from '@/lib/useRfidScanner';
 
 export default function Register() {
-    const [form, setForm] = useState({ fullName: '', username: '', password: '', role: 'USER' });
+    const [form, setForm] = useState({ fullName: '', username: '', password: '', role: 'USER', badgeNumber: '' });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [badgeDetected, setBadgeDetected] = useState(false);
     const router = useRouter();
+
+    // Listen for RFID badge taps to auto-fill badge number
+    useRfidScanner({
+        onScan: (badgeNumber) => {
+            setForm(prev => ({ ...prev, badgeNumber }));
+            setBadgeDetected(true);
+            setTimeout(() => setBadgeDetected(false), 2000);
+        },
+        enabled: !loading,
+    });
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -17,10 +28,10 @@ export default function Register() {
         setLoading(true);
 
         try {
-            await auth.register(form.fullName, form.username, form.password, form.role);
+            await auth.register(form.fullName, form.username, form.password, form.role, form.badgeNumber || undefined);
             router.push('/login');
         } catch {
-            setError('Registration failed. Please check your inputs.');
+            setError('Registration failed. Username or badge number may already be taken.');
         } finally {
             setLoading(false);
         }
@@ -77,6 +88,36 @@ export default function Register() {
                             required
                         />
                     </div>
+
+                    {/* Badge Number with RFID auto-fill */}
+                    <div>
+                        <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">
+                            RFID Badge <span className="normal-case text-[var(--text-muted)] font-normal">(optional)</span>
+                        </label>
+                        <div className="relative">
+                            <input
+                                className={`input pr-10 transition-all ${
+                                    badgeDetected ? 'border-[var(--success)] bg-green-50' : ''
+                                }`}
+                                placeholder="Tap your card or type badge number"
+                                value={form.badgeNumber}
+                                onChange={e => setForm({ ...form, badgeNumber: e.target.value })}
+                            />
+                            {form.badgeNumber && (
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                    {badgeDetected ? (
+                                        <span className="text-[var(--success)] text-sm">✓</span>
+                                    ) : (
+                                        <span className="text-[var(--text-muted)] text-xs">📶</span>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        <p className="text-xs text-[var(--text-muted)] mt-1">
+                            Tap your RFID card on the reader to auto-fill this field
+                        </p>
+                    </div>
+
                     <div>
                         <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">Role</label>
                         <select

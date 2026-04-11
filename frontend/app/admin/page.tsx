@@ -18,14 +18,12 @@ export default function AdminDashboard() {
             .finally(() => setLoading(false));
     }, []);
 
-    const totalRevenue = orderList.reduce((sum, o) => sum + (o.paidAmount ?? 0), 0);
-    const totalOutstanding = orderList.reduce((sum, o) => sum + (o.remainingAmount ?? 0), 0);
+    const totalRevenue = orderList.reduce((sum, o) => sum + (o.totalPrice ?? 0), 0);
 
     const stats = [
         { label: 'Total Products', value: products.length, color: 'var(--accent)', bg: 'var(--accent-soft)', icon: '▦' },
         { label: 'Total Orders', value: orderList.length, color: 'var(--success)', bg: '#dcfce7', icon: '▤' },
         { label: 'Revenue', value: `$${totalRevenue.toFixed(2)}`, color: 'var(--accent)', bg: 'var(--accent-soft)', icon: '◆' },
-        { label: 'Outstanding', value: `$${totalOutstanding.toFixed(2)}`, color: 'var(--danger)', bg: '#fef2f2', icon: '◇' },
     ];
 
     if (loading) {
@@ -45,7 +43,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-8">
                 {stats.map((stat, i) => (
                     <div
                         key={stat.label}

@@ -3,12 +3,32 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { auth } from '@/lib/api';
+import { useRfidScanner } from '@/lib/useRfidScanner';
 
 export default function Login() {
     const [form, setForm] = useState({ username: '', password: '' });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [badgeScanning, setBadgeScanning] = useState(false);
     const router = useRouter();
+
+    // Listen for RFID badge taps
+    useRfidScanner({
+        onScan: async (badgeNumber) => {
+            setBadgeScanning(true);
+            setError('');
+
+            try {
+                await auth.badgeLogin(badgeNumber);
+                router.push('/pos');
+            } catch {
+                setError(`Badge not recognized (${badgeNumber}). Please register first or use manual login.`);
+            } finally {
+                setBadgeScanning(false);
+            }
+        },
+        enabled: !loading,
+    });
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -36,6 +56,31 @@ export default function Login() {
                         Welcome back
                     </h2>
                     <p className="text-sm text-[var(--text-muted)] mt-1">Sign in to your account</p>
+                </div>
+
+                {/* RFID Badge Section */}
+                <div
+                    className={`border-2 border-dashed rounded-xl p-4 text-center mb-5 transition-all ${
+                        badgeScanning
+                            ? 'border-[var(--accent)] bg-[var(--accent-soft)]'
+                            : 'border-[var(--border)] bg-[var(--bg-base)]'
+                    }`}
+                >
+                    <div className={`text-3xl mb-2 ${badgeScanning ? 'animate-pulse' : ''}`}>
+                        📶
+                    </div>
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">
+                        {badgeScanning ? 'Reading badge…' : 'Tap your RFID badge'}
+                    </p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">
+                        Hold your card near the reader to sign in instantly
+                    </p>
+                </div>
+
+                <div className="flex items-center gap-3 mb-5">
+                    <div className="flex-1 h-px bg-[var(--border)]" />
+                    <span className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">or</span>
+                    <div className="flex-1 h-px bg-[var(--border)]" />
                 </div>
 
                 {error && (

@@ -26,9 +26,8 @@ public class User {
 
     @NotNull
     private String password;
-    //TODO: add when Budges are connected
-//    @NotNull
-//    private int budgeNumber;
+    @Column(unique = true)
+    private String badgeNumber;
 
     private String email;
 

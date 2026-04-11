@@ -46,7 +46,12 @@ public class UserService {
         User existingUser = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found for ID: " + userId));
         existingUser.setUsername(updatedUser.getUsername());
-        existingUser.setPassword(updatedUser.getPassword());
+        if (updatedUser.getPassword() != null && !updatedUser.getPassword().isBlank()) {
+            existingUser.setPassword(updatedUser.getPassword());
+        }
+        if (updatedUser.getBadgeNumber() != null) {
+            existingUser.setBadgeNumber(updatedUser.getBadgeNumber().isBlank() ? null : updatedUser.getBadgeNumber());
+        }
         return userRepository.save(existingUser);
     }
 
